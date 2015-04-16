@@ -91,9 +91,9 @@ appendPath p r = r { rdrPath = DList.snoc (rdrPath r) p }
 setValue :: A.Value -> ParseReader -> ParseReader
 setValue v r = r { rdrValue = v }
 
--- | A piece of a path into a specific part of some JSON data. Internally, a
--- list of these is maintained as the parser traverses the JSON values, and
--- it is included in the error if one occurs.
+-- | A piece of a path leading to a specific part of the JSON data.
+-- Internally, a list of these is maintained as the parser traverses the JSON
+-- data. This list is included in the error if one occurs.
 data PathPiece
   = ObjectKey Text
   | ArrayIndex Int
