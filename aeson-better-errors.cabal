@@ -1,0 +1,50 @@
+name:                aeson-better-errors
+version:             0.1.0.0
+synopsis:            Better error messages when decoding JSON values.
+license:             MIT
+license-file:        LICENSE
+author:              Harry Garrood
+maintainer:          harry@garrood.me
+homepage:            https://github.com/hdgarrood/aeson-better-errors
+category:            Text, Web, JSON
+build-type:          Simple
+cabal-version:       >=1.10
+
+description:
+  TODO
+
+source-repository head
+  type:     git
+  location: https://github.com/hdgarrood/aeson-better-errors
+
+library
+  exposed-modules:   Data.Aeson.BetterErrors
+  build-depends:     base >=4 && <5
+                   , aeson >=0.6.1.0
+                   , unordered-containers
+                   , dlist
+                   , text
+                   , bytestring
+                   , scientific
+                   , vector
+                   , transformers
+                   , mtl
+
+  ghc-options:       -Wall
+  hs-source-dirs:    src
+  default-language:  Haskell2010
+
+test-suite tests
+  type:              exitcode-stdio-1.0
+  main-is:           Main.hs
+  hs-source-dirs:    test
+  build-depends:     base >=4 && <5
+                   , aeson -any
+                   , aeson-better-errors -any
+                   , bytestring -any
+                   , text -any
+                   , unordered-containers -any
+                   , tasty -any
+                   , tasty-hunit -any
+  ghc-options:       -Wall -fno-warn-missing-signatures
+  default-language:  Haskell2010
