@@ -4,6 +4,8 @@
 -- however, that this package only deals with generating good error messages
 -- /after/ the JSON has been parsed into a 'Data.Aeson.Value' - unfortunately,
 -- invalid JSON will still produce poor error messages.
+--
+-- See <http://harry.garrood.me/blog/aeson-better-errors/>
 
 module Data.Aeson.BetterErrors
   ( -- * The Parser type
@@ -71,17 +73,3 @@ import Data.Aeson.BetterErrors.Internal
 --
 -- Or, export our own (<|>) that uses a semigroup (since errors are
 -- 'nonempty') - that is, we don't want to allow failing with no error.
---
--- TODO
--- Interop with FromJSON? Can we make a FromJSON instance from a Parse err a?
-
--- Good for reaching into a structure and plucking out a particular value.
---
--- TODO
--- Display error
-
--- convention:
---   asFoo :: Parse err Foo
---   parseFoo' :: a -> Either err Foo
---   parseFoo :: ByteString -> Either (ParseError err) Foo
---
