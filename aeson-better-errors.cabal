@@ -36,17 +36,17 @@ library
   hs-source-dirs:    src
   default-language:  Haskell2010
 
-test-suite tests
-  type:              exitcode-stdio-1.0
-  main-is:           Main.hs
-  hs-source-dirs:    test
-  build-depends:     base >=4 && <5
-                   , aeson -any
-                   , aeson-better-errors -any
-                   , bytestring -any
-                   , text -any
-                   , unordered-containers -any
-                   , tasty -any
-                   , tasty-hunit -any
-  ghc-options:       -Wall -fno-warn-missing-signatures
-  default-language:  Haskell2010
+-- test-suite tests
+--   type:              exitcode-stdio-1.0
+--   main-is:           Main.hs
+--   hs-source-dirs:    test
+--   build-depends:     base >=4 && <5
+--                    , aeson -any
+--                    , aeson-better-errors -any
+--                    , bytestring -any
+--                    , text -any
+--                    , unordered-containers -any
+--                    , tasty -any
+--                    , tasty-hunit -any
+--   ghc-options:       -Wall -fno-warn-missing-signatures
+--   default-language:  Haskell2010
