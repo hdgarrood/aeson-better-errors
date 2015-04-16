@@ -1,16 +1,14 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
--- | A utility module for dealing with reading JSON, and generating good better
--- messages. Note, however, that this package only deals with generating good
--- error messages /after/ the JSON has been parsed into a 'Data.Aeson.Value' -
--- unfortunately, invalid JSON will still produce poor error messages.
+-- | A module for decoding JSON, and generating good better messages. Note,
+-- however, that this package only deals with generating good error messages
+-- /after/ the JSON has been parsed into a 'Data.Aeson.Value' - unfortunately,
+-- invalid JSON will still produce poor error messages.
 
 module Data.Aeson.BetterErrors
-  ( -- * The Parser type, and how to run it
+  ( -- * The Parser type
     Parse
-  , parse
-  , parseStrict
-  , parseValue
+
   -- * Basic parsers
   , asText
   , asString
@@ -43,6 +41,11 @@ module Data.Aeson.BetterErrors
   , withBool
   , withObject
   , withArray
+
+  -- * Running parsers
+  , parse
+  , parseStrict
+  , parseValue
 
   -- * Errors
   , ParseError(..)

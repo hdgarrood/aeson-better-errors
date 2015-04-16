@@ -135,9 +135,9 @@ displayJSONType t = case t of
   TyBool   -> "boolean"
   TyNull   -> "null"
 
--- | Turn a 'ParseError' into a human-readable list of 'String' values.
+-- | Turn a 'ParseError' into a human-readable list of 'Text' values.
 -- They will be in a sensible order. For example, you can feed the result to
--- @'mapM' 'putStrLn'@, or 'unlines'.
+-- @'mapM' 'T.putStrLn'@, or 'T.unlines'.
 displayError :: (err -> Text) -> ParseError err -> [Text]
 displayError _ (InvalidJSON str) =
   [ "The input could not be parsed as JSON", "aeson said: " <> T.pack str ]
