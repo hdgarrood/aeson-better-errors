@@ -6,9 +6,11 @@
 -- unfortunately, invalid JSON will still produce poor error messages.
 
 module Data.Aeson.BetterErrors
-  ( -- * The Parser type
+  ( -- * The Parser type, and how to run it
     Parse
-  , runParse
+  , parse
+  , parseStrict
+  , parseValue
   -- * Basic parsers
   , asText
   , asString
@@ -67,6 +69,9 @@ import Data.Aeson.BetterErrors.Internal
 -- Interop with FromJSON? Can we make a FromJSON instance from a Parse err a?
 
 -- Good for reaching into a structure and plucking out a particular value.
+--
+-- TODO
+-- Display error
 
 -- convention:
 --   asFoo :: Parse err Foo

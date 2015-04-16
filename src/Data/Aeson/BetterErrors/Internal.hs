@@ -13,6 +13,7 @@ import qualified Data.DList as DList
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as B
 
 import qualified Data.Aeson as A
 import Data.Vector ((!?))
@@ -25,21 +26,41 @@ import Data.Aeson.BetterErrors.Utils
 
 -- | The type of parsers: things which take JSON values as input, and spit out
 -- either detailed errors or successfully parsed values.
+--
+-- The @err@ type parameter may be used for the type of your own errors; if you
+-- don't need to use any errors of your own, simply set it to @()@.
 newtype Parse err a
-  = Parse { unParse :: ReaderT ParseReader (Except (ParseError err)) a }
+  = Parse (ReaderT ParseReader (Except (ParseError err)) a)
   deriving (Functor, Applicative, Monad,
             MonadReader ParseReader, MonadError (ParseError err))
 
--- | Run a parser with a lazy 'BL.ByteString' containing JSON data. Note that
--- the normal caveat applies: the JSON supplied must contain either an object
--- or an array for this to work.
-runParse :: Parse err a -> BL.ByteString -> Either (ParseError err) a
-runParse (Parse p) str =
-  case A.eitherDecode str of
+runParser ::
+  (s -> Either String A.Value) ->
+  Parse err a ->
+  s ->
+  Either (ParseError err) a
+runParser decode (Parse p) src =
+  case decode src of
     Left err -> Left (InvalidJSON err)
     Right value ->
       let initialReader = ParseReader DList.empty value
       in  runExcept (runReaderT p initialReader)
+
+-- | Run a parser with a lazy 'BL.ByteString' containing JSON data. Note that
+-- the normal caveat applies: the JSON supplied must contain either an object
+-- or an array for this to work.
+parse :: Parse err a -> BL.ByteString -> Either (ParseError err) a
+parse = runParser A.eitherDecode
+
+-- | Run a parser with a strict 'B.ByteString' containing JSON data. Note that
+-- the normal caveat applies: the JSON supplied must contain either an object
+-- or an array for this to work.
+parseStrict :: Parse err a -> B.ByteString -> Either (ParseError err) a
+parseStrict = runParser A.eitherDecodeStrict
+
+-- | Run a parser with a pre-parsed JSON 'A.Value'.
+parseValue :: Parse err a -> A.Value -> Either (ParseError err) a
+parseValue = runParser Right
 
 -- | Data used internally by the 'Parse' type.
 data ParseReader = ParseReader
@@ -61,7 +82,7 @@ data PathPiece
   | ArrayIndex Int
   deriving (Show, Eq, Ord)
 
--- | A value indicating that the value could not be parsed successfully.
+-- | A value indicating that the JSON could not be decoded successfully.
 data ParseError err
   = InvalidJSON String
   | BadSchema [PathPiece] (ErrorSpecifics err)
@@ -266,8 +287,12 @@ withRealFloat = with asRealFloat
 withBool :: (Bool -> Either err a) -> Parse err a
 withBool = with asBool
 
+-- | Prefer to use functions like 'key or 'eachInObject' to this one where
+-- possible, as they will generate better error messages.
 withObject :: (A.Object -> Either err a) -> Parse err a
 withObject = with asObject
 
+-- | Prefer to use functions like 'nth' or 'eachInArray' to this one where
+-- possible, as they will generate better error messages.
 withArray :: (A.Array -> Either err a) -> Parse err a
 withArray = with asArray
