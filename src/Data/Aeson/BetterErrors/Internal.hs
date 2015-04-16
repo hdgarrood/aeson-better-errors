@@ -1,6 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.Aeson.BetterErrors.Internal where
 
@@ -32,8 +31,8 @@ newtype Parse err a
             MonadReader ParseReader, MonadError (ParseError err))
 
 -- | Run a parser with a lazy 'BL.ByteString' containing JSON data. Note that
--- the normal caveat applies: the JSON supplied must be either an object or an
--- array for this to work.
+-- the normal caveat applies: the JSON supplied must contain either an object
+-- or an array for this to work.
 runParse :: Parse err a -> BL.ByteString -> Either (ParseError err) a
 runParse (Parse p) str =
   case A.eitherDecode str of
@@ -134,7 +133,7 @@ asIntegral =
     >>= either (badSchema . ExpectedIntegral) return
 
 -- | Parse a single JSON number as any 'RealFloat' type.
-asRealFloat :: forall a err. RealFloat a => Parse err a
+asRealFloat :: RealFloat a => Parse err a
 asRealFloat =
   floatingOrInteger <$> asScientific
     >>= either return (return . fromIntegral)
@@ -142,22 +141,27 @@ asRealFloat =
   -- This local declaration is just here to give GHC a hint as to which type
   -- should be used in the case of an Integral (here, we choose Integer, for
   -- safety).
-  floatingOrInteger :: Scientific -> Either a Integer
+  floatingOrInteger :: RealFloat b => Scientific -> Either b Integer
   floatingOrInteger = S.floatingOrInteger
 
 -- | Parse a single JSON boolean as a 'Bool'.
 asBool :: Parse err Bool
 asBool = as patBool TyBool
 
--- | Parse a JSON object, as an 'A.Object'.
+-- | Parse a JSON object, as an 'A.Object'. You should prefer functions like
+-- 'eachInObject' where possible, since they will usually generate better
+-- error messages.
 asObject :: Parse err A.Object
 asObject = as patObject TyObject
 
--- | Parse a JSON array, as an 'A.Array'.
+-- | Parse a JSON array, as an 'A.Array'. You should prefer functions like
+-- 'eachInArray' where possible, since they will usually generate better
+-- error messages.
 asArray :: Parse err A.Array
 asArray = as patArray TyArray
 
--- | Parse a single JSON null value.
+-- | Parse a single JSON null value. Useful if you want to throw an error in
+-- the case where something is not null.
 asNull :: Parse err ()
 asNull = as patNull TyNull
 

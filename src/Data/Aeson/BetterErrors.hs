@@ -10,9 +10,44 @@ module Data.Aeson.BetterErrors
     Parse
   , runParse
   -- * Basic parsers
-  , PathPiece(..)
+  , asText
+  , asString
+  , asScientific
+  , asIntegral
+  , asRealFloat
+  , asBool
+  , asNull
+  , asObject
+  , asArray
+
+  -- * Traversing JSON
+  , key
+  , keyOrDefault
+  , keyMay
+
+  , nth
+  , nthOrDefault
+  , nthMay
+
+  , eachInArray
+  , eachInObject
+
+  -- * Custom validations
+  , withText
+  , withString
+  , withScientific
+  , withIntegral
+  , withRealFloat
+  , withBool
+  , withObject
+  , withArray
+
+  -- * Errors
   , ParseError(..)
+  , PathPiece(..)
   , ErrorSpecifics(..)
+
+  -- * Miscellaneous
   , JSONType(..)
   , jsonTypeOf
   ) where
