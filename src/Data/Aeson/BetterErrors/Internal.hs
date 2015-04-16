@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
 module Data.Aeson.BetterErrors.Internal where
@@ -8,6 +9,8 @@ import Control.Monad.Reader
 import Control.Monad.Trans.Except
 import Control.Monad.Error.Class (MonadError(..))
 
+import Data.Foldable (foldMap)
+import Data.Monoid
 import Data.DList (DList)
 import qualified Data.DList as DList
 import Data.Text (Text)
@@ -70,11 +73,11 @@ parseValue = runParser Right
 -- @
 --    parseJSON = toAesonParser showMyCustomError myParser
 -- @
-toAesonParser :: (err -> String) -> Parse err a -> A.Value -> A.Parser a
+toAesonParser :: (err -> Text) -> Parse err a -> A.Value -> A.Parser a
 toAesonParser showCustom p val =
   case parseValue p val of
     Right x -> return x
-    Left err -> fail (unlines (displayError showCustom err))
+    Left err -> fail (unlines (map T.unpack (displayError showCustom err)))
 
 -- | Data used internally by the 'Parse' type.
 data ParseReader = ParseReader
@@ -123,7 +126,7 @@ data JSONType
   | TyNull
   deriving (Show, Eq, Ord)
 
-displayJSONType :: JSONType -> String
+displayJSONType :: JSONType -> Text
 displayJSONType t = case t of
   TyObject -> "object"
   TyArray  -> "array"
@@ -135,32 +138,32 @@ displayJSONType t = case t of
 -- | Turn a 'ParseError' into a human-readable list of 'String' values.
 -- They will be in a sensible order. For example, you can feed the result to
 -- @'mapM' 'putStrLn'@, or 'unlines'.
-displayError :: (err -> String) -> ParseError err -> [String]
+displayError :: (err -> Text) -> ParseError err -> [Text]
 displayError _ (InvalidJSON str) =
-  [ "The input could not be parsed as JSON", "aeson said: " ++ str ]
+  [ "The input could not be parsed as JSON", "aeson said: " <> T.pack str ]
 displayError f (BadSchema [] specs) =
   displaySpecifics f specs
 displayError f (BadSchema path specs) =
-  [ "At the path: " ++ displayPath path ] ++ displaySpecifics f specs
+  [ "At the path: " <> displayPath path ] <> displaySpecifics f specs
 
-displayPath :: [PathPiece] -> String
-displayPath = concatMap showPiece
+displayPath :: [PathPiece] -> Text
+displayPath = foldMap showPiece
   where
-  showPiece (ObjectKey t)  = "[" ++ show t ++ "]"
-  showPiece (ArrayIndex i) = "[" ++ show i ++ "]"
+  showPiece (ObjectKey t)  = "[" <> tshow t <> "]"
+  showPiece (ArrayIndex i) = "[" <> tshow i <> "]"
 
-displaySpecifics :: (err -> String) -> ErrorSpecifics err -> [String]
+displaySpecifics :: (err -> Text) -> ErrorSpecifics err -> [Text]
 displaySpecifics _ (KeyMissing k) =
-  [ "The required key " ++ show k ++ " is missing." ]
+  [ "The required key " <> tshow k <> " is missing." ]
 displaySpecifics _ (OutOfBounds i) =
-  [ "The array index " ++ show i ++ " is out of bounds." ]
+  [ "The array index " <> tshow i <> " is out of bounds." ]
 displaySpecifics _ (WrongType t val) =
   [ "Type mismatch:"
-  , "Expected a value of type " ++ displayJSONType t
-  , "Got:" ++ T.unpack (decodeUtf8 (BL.toStrict (A.encode val)))
+  , "Expected a value of type " <> displayJSONType t
+  , "Got:" <> decodeUtf8 (BL.toStrict (A.encode val))
   ]
 displaySpecifics _ (ExpectedIntegral x) =
-  [ "Expected an integral value, got " ++ show x ]
+  [ "Expected an integral value, got " <> tshow x ]
 displaySpecifics f (CustomError err) =
   [ f err ]
 

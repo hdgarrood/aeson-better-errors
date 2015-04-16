@@ -5,10 +5,13 @@ import Control.Monad.Error.Class (MonadError(..))
 
 import qualified Data.Aeson as A
 import Data.Scientific (Scientific)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 
 -----------------------
 -- Various utilities
+
+tshow :: Show a => a -> Text
+tshow = pack . show
 
 -- | A version of catchJust from "Control.Exception.Base", except for any
 -- instance of 'MonadError'.
