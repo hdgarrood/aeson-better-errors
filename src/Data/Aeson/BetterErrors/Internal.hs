@@ -12,7 +12,6 @@ import Data.DList (DList)
 import qualified Data.DList as DList
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as B
@@ -160,6 +159,10 @@ displaySpecifics _ (WrongType t val) =
   , "Expected a value of type " ++ displayJSONType t
   , "Got:" ++ T.unpack (decodeUtf8 (BL.toStrict (A.encode val)))
   ]
+displaySpecifics _ (ExpectedIntegral x) =
+  [ "Expected an integral value, got " ++ show x ]
+displaySpecifics f (CustomError err) =
+  [ f err ]
 
 -- | Get the type of a JSON value.
 jsonTypeOf :: A.Value -> JSONType
