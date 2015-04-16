@@ -1,5 +1,4 @@
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | A utility module for dealing with reading JSON, and generating good error
@@ -10,7 +9,6 @@ module Data.Aeson.BetterErrors where
 import Control.Applicative
 import Control.Monad.Reader
 import Control.Monad.Error.Class (MonadError(..))
-import Control.Monad.Trans.Except
 
 import qualified Data.Aeson as A
 import Data.Vector ((!?))
@@ -19,11 +17,12 @@ import Data.Scientific (Scientific)
 import qualified Data.Scientific as S
 import qualified Data.HashMap.Strict as HashMap
 
-import Data.DList (DList)
 import qualified Data.DList as DList
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.ByteString.Lazy as BL
+
+import Data.Aeson.BetterErrors.Internal
+import Data.Aeson.BetterErrors.Utils
 
 -- TODO Alternative?
 -- use monoid, combine errors?
@@ -36,66 +35,6 @@ import qualified Data.ByteString.Lazy as BL
 --   asFoo :: Parse err Foo
 --   parseFoo' :: a -> Either err Foo
 --   parseFoo :: ByteString -> Either (ParseError err) Foo 
-
-type Parse err a
-  = ReaderT ParseReader (Except (ParseError err)) a
-  -- TODO: newtype, for nicer type signatures.
-  --deriving (Functor, Applicative, Monad)
-
-runParse :: Parse err a -> BL.ByteString -> Either (ParseError err) a
-runParse p str =
-  case A.eitherDecode str of
-    Left err -> Left (InvalidJSON err)
-    Right value ->
-      let initialReader = ParseReader DList.empty value
-      in  runExcept (runReaderT p initialReader)
-
-data ParseReader = ParseReader
-  { rdrPath  :: DList PathPiece
-  , rdrValue :: A.Value
-  }
-
--- helper functions for ParseReader
-appendPath :: PathPiece -> ParseReader -> ParseReader
-appendPath p r = r { rdrPath = DList.snoc (rdrPath r) p }
-
-setValue :: A.Value -> ParseReader -> ParseReader
-setValue v r = r { rdrValue = v }
-
-data PathPiece
-  = ObjectKey Text
-  | ArrayIndex Int
-  deriving (Show, Eq, Ord)
-
-data ParseError err
-  = InvalidJSON String
-  | BadSchema [PathPiece] (ErrorSpecifics err)
-  deriving (Show, Eq)
-
-data ErrorSpecifics err
-  = KeyMissing Text
-  | OutOfBounds Int
-  | WrongType JSONType A.Value -- ^ Expected type, actual value
-  | ExpectedIntegral Double
-  | CustomError err
-  deriving (Show, Eq)
-
-data JSONType
-  = TyObject
-  | TyArray
-  | TyString
-  | TyNumber
-  | TyBool
-  | TyNull
-  deriving (Show, Eq, Ord)
-
-jsonTypeOf :: A.Value -> JSONType
-jsonTypeOf (A.Object _) = TyObject
-jsonTypeOf (A.Array _)  = TyArray
-jsonTypeOf (A.String _) = TyString
-jsonTypeOf (A.Number _) = TyNumber
-jsonTypeOf (A.Bool _)   = TyBool
-jsonTypeOf A.Null       = TyNull
 
 -- | Lift any parsing function into the 'Parse' type.
 liftParse :: (A.Value -> Either (ErrorSpecifics err) a) -> Parse err a
@@ -266,50 +205,3 @@ withObject = with asObject
 
 withArray :: (A.Array -> Either err a) -> Parse err a
 withArray = with asArray
-
------------------------
--- Various utilities
-
--- | A version of catchJust from "Control.Exception.Base", except for any
--- instance of 'MonadError'.
-catchJust :: MonadError e m
-  => (e -> Maybe b) -- ^ Predicate to select exceptions
-  -> m a            -- ^ Computation to run
-  -> (b -> m a)     -- ^ Handler
-  -> m a
-catchJust p act handler = catchError act handle
-  where
-  handle e =
-    case p e of
-      Nothing -> throwError e
-      Just b -> handler b
-
-mapLeft :: (a -> b) -> Either a c -> Either b c
-mapLeft f (Left x) = Left (f x)
-mapLeft _ (Right y) = Right y
-
--- Value-level patterns for json values
-
-patNull :: A.Value -> Maybe ()
-patNull A.Null = Just ()
-patNull _ = Nothing
-
-patString :: A.Value -> Maybe Text
-patString (A.String t) = Just t
-patString _ = Nothing
-
-patNumber :: A.Value -> Maybe Scientific
-patNumber (A.Number x) = Just x
-patNumber _ = Nothing
-
-patBool :: A.Value -> Maybe Bool
-patBool (A.Bool x) = Just x
-patBool _ = Nothing
-
-patObject :: A.Value -> Maybe A.Object
-patObject (A.Object obj) = Just obj
-patObject _ = Nothing
-
-patArray :: A.Value -> Maybe A.Array
-patArray (A.Array arr) = Just arr
-patArray _ = Nothing
