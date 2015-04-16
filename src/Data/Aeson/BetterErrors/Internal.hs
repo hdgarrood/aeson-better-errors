@@ -24,11 +24,16 @@ import qualified Data.HashMap.Strict as HashMap
 
 import Data.Aeson.BetterErrors.Utils
 
+-- | The type of parsers: things which take JSON values as input, and spit out
+-- either detailed errors or successfully parsed values.
 newtype Parse err a
   = Parse { unParse :: ReaderT ParseReader (Except (ParseError err)) a }
   deriving (Functor, Applicative, Monad,
             MonadReader ParseReader, MonadError (ParseError err))
 
+-- | Run a parser with a lazy 'BL.ByteString' containing JSON data. Note that
+-- the normal caveat applies: the JSON supplied must be either an object or an
+-- array for this to work.
 runParse :: Parse err a -> BL.ByteString -> Either (ParseError err) a
 runParse (Parse p) str =
   case A.eitherDecode str of
@@ -37,28 +42,35 @@ runParse (Parse p) str =
       let initialReader = ParseReader DList.empty value
       in  runExcept (runReaderT p initialReader)
 
+-- | Data used internally by the 'Parse' type.
 data ParseReader = ParseReader
   { rdrPath  :: DList PathPiece
   , rdrValue :: A.Value
   }
 
--- helper functions for ParseReader
 appendPath :: PathPiece -> ParseReader -> ParseReader
 appendPath p r = r { rdrPath = DList.snoc (rdrPath r) p }
 
 setValue :: A.Value -> ParseReader -> ParseReader
 setValue v r = r { rdrValue = v }
 
+-- | A piece of a path into a specific part of some JSON data. Internally, a
+-- list of these is maintained as the parser traverses the JSON values, and
+-- it is included in the error if one occurs.
 data PathPiece
   = ObjectKey Text
   | ArrayIndex Int
   deriving (Show, Eq, Ord)
 
+-- | A value indicating that the value could not be parsed successfully.
 data ParseError err
   = InvalidJSON String
   | BadSchema [PathPiece] (ErrorSpecifics err)
   deriving (Show, Eq)
 
+-- | Detailed information in the case where a value could be parsed as JSON,
+-- but a value of the required type could not be constructed from it, for some
+-- reason.
 data ErrorSpecifics err
   = KeyMissing Text
   | OutOfBounds Int
@@ -67,6 +79,7 @@ data ErrorSpecifics err
   | CustomError err
   deriving (Show, Eq)
 
+-- | An enumeration of the different types that JSON values may take.
 data JSONType
   = TyObject
   | TyArray
@@ -76,6 +89,7 @@ data JSONType
   | TyNull
   deriving (Show, Eq, Ord)
 
+-- | Get the type of a JSON value.
 jsonTypeOf :: A.Value -> JSONType
 jsonTypeOf (A.Object _) = TyObject
 jsonTypeOf (A.Array _)  = TyArray

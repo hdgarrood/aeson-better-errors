@@ -1,6 +1,9 @@
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
--- | A utility module for dealing with reading JSON, and generating good error
--- messages in the case of JSON with a bad schema.
+-- | A utility module for dealing with reading JSON, and generating good better
+-- messages. Note, however, that this package only deals with generating good
+-- error messages /after/ the JSON has been parsed into a 'Data.Aeson.Value' -
+-- unfortunately, invalid JSON will still produce poor error messages.
 
 module Data.Aeson.BetterErrors
   ( -- * The Parser type
@@ -14,6 +17,7 @@ module Data.Aeson.BetterErrors
   , jsonTypeOf
   ) where
 
+import Data.Aeson (Value) -- for haddock
 import Data.Aeson.BetterErrors.Internal
 
 -- TODO Alternative?
