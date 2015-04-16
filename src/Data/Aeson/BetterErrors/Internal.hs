@@ -12,10 +12,13 @@ import Data.DList (DList)
 import qualified Data.DList as DList
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import Data.Text.Encoding (decodeUtf8)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as B
 
 import qualified Data.Aeson as A
+import qualified Data.Aeson.Types as A
 import Data.Vector ((!?))
 import qualified Data.Vector as V
 import Data.Scientific (Scientific)
@@ -24,11 +27,11 @@ import qualified Data.HashMap.Strict as HashMap
 
 import Data.Aeson.BetterErrors.Utils
 
--- | The type of parsers: things which take JSON values as input, and spit out
--- either detailed errors or successfully parsed values.
+-- | The type of parsers: things which consume JSON values and produce either
+-- detailed errors or successfully parsed values (of other types).
 --
--- The @err@ type parameter may be used for the type of your own errors; if you
--- don't need to use any errors of your own, simply set it to @()@.
+-- The @err@ type parameter is for your own errors; if you don't need to use
+-- any errors of your own, simply set it to @()@.
 newtype Parse err a
   = Parse (ReaderT ParseReader (Except (ParseError err)) a)
   deriving (Functor, Applicative, Monad,
@@ -61,6 +64,18 @@ parseStrict = runParser A.eitherDecodeStrict
 -- | Run a parser with a pre-parsed JSON 'A.Value'.
 parseValue :: Parse err a -> A.Value -> Either (ParseError err) a
 parseValue = runParser Right
+
+-- | This function is useful when you have a @'Parse' err a@ and you want to
+-- obtain an instance for @'A.FromJSON' a@. Simply define:
+--
+-- @
+--    parseJSON = toAesonParser showMyCustomError myParser
+-- @
+toAesonParser :: (err -> String) -> Parse err a -> A.Value -> A.Parser a
+toAesonParser showCustom p val =
+  case parseValue p val of
+    Right x -> return x
+    Left err -> fail (unlines (displayError showCustom err))
 
 -- | Data used internally by the 'Parse' type.
 data ParseReader = ParseReader
@@ -108,6 +123,43 @@ data JSONType
   | TyBool
   | TyNull
   deriving (Show, Eq, Ord)
+
+displayJSONType :: JSONType -> String
+displayJSONType t = case t of
+  TyObject -> "object"
+  TyArray  -> "array"
+  TyString -> "string"
+  TyNumber -> "number"
+  TyBool   -> "boolean"
+  TyNull   -> "null"
+
+-- | Turn a 'ParseError' into a human-readable list of 'String' values.
+-- They will be in a sensible order. For example, you can feed the result to
+-- @'mapM' 'putStrLn'@, or 'unlines'.
+displayError :: (err -> String) -> ParseError err -> [String]
+displayError _ (InvalidJSON str) =
+  [ "The input could not be parsed as JSON", "aeson said: " ++ str ]
+displayError f (BadSchema [] specs) =
+  displaySpecifics f specs
+displayError f (BadSchema path specs) =
+  [ "At the path: " ++ displayPath path ] ++ displaySpecifics f specs
+
+displayPath :: [PathPiece] -> String
+displayPath = concatMap showPiece
+  where
+  showPiece (ObjectKey t)  = "[" ++ show t ++ "]"
+  showPiece (ArrayIndex i) = "[" ++ show i ++ "]"
+
+displaySpecifics :: (err -> String) -> ErrorSpecifics err -> [String]
+displaySpecifics _ (KeyMissing k) =
+  [ "The required key " ++ show k ++ " is missing." ]
+displaySpecifics _ (OutOfBounds i) =
+  [ "The array index " ++ show i ++ " is out of bounds." ]
+displaySpecifics _ (WrongType t val) =
+  [ "Type mismatch:"
+  , "Expected a value of type " ++ displayJSONType t
+  , "Got:" ++ T.unpack (decodeUtf8 (BL.toStrict (A.encode val)))
+  ]
 
 -- | Get the type of a JSON value.
 jsonTypeOf :: A.Value -> JSONType

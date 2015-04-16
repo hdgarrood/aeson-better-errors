@@ -48,8 +48,12 @@ module Data.Aeson.BetterErrors
   , ParseError(..)
   , PathPiece(..)
   , ErrorSpecifics(..)
+  , displayError
+  , displayPath
+  , displaySpecifics
 
   -- * Miscellaneous
+  , toAesonParser
   , JSONType(..)
   , jsonTypeOf
   ) where
