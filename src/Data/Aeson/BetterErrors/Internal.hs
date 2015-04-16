@@ -154,13 +154,13 @@ displayPath = foldMap showPiece
 
 displaySpecifics :: (err -> Text) -> ErrorSpecifics err -> [Text]
 displaySpecifics _ (KeyMissing k) =
-  [ "The required key " <> tshow k <> " is missing." ]
+  [ "The required key " <> tshow k <> " is missing" ]
 displaySpecifics _ (OutOfBounds i) =
-  [ "The array index " <> tshow i <> " is out of bounds." ]
+  [ "The array index " <> tshow i <> " is out of bounds" ]
 displaySpecifics _ (WrongType t val) =
   [ "Type mismatch:"
   , "Expected a value of type " <> displayJSONType t
-  , "Got:" <> decodeUtf8 (BL.toStrict (A.encode val))
+  , "Got: " <> decodeUtf8 (BL.toStrict (A.encode val))
   ]
 displaySpecifics _ (ExpectedIntegral x) =
   [ "Expected an integral value, got " <> tshow x ]
