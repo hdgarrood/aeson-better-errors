@@ -4,7 +4,16 @@
 -- | A utility module for dealing with reading JSON, and generating good error
 -- messages in the case of JSON with a bad schema.
 
-module Data.Aeson.BetterErrors where
+module Data.Aeson.BetterErrors
+  ( Parse
+  , runParse
+  , PathPiece(..)
+  , ParseError(..)
+  , ErrorSpecifics(..)
+  , JSONType(..)
+  , jsonTypeOf
+  , module Data.Aeson.BetterErrors
+  ) where
 
 import Control.Applicative
 import Control.Monad.Reader
@@ -31,10 +40,10 @@ import Data.Aeson.BetterErrors.Utils
 
 -- Good for reaching into a structure and plucking out a particular value.
 
--- convention: 
+-- convention:
 --   asFoo :: Parse err Foo
 --   parseFoo' :: a -> Either err Foo
---   parseFoo :: ByteString -> Either (ParseError err) Foo 
+--   parseFoo :: ByteString -> Either (ParseError err) Foo
 
 -- | Lift any parsing function into the 'Parse' type.
 liftParse :: (A.Value -> Either (ErrorSpecifics err) a) -> Parse err a
@@ -95,7 +104,7 @@ asObject = as patObject TyObject
 asArray :: Parse err A.Array
 asArray = as patArray TyArray
 
--- | Parse a single `null` value.
+-- | Parse a single JSON null value.
 asNull :: Parse err ()
 asNull = as patNull TyNull
 
