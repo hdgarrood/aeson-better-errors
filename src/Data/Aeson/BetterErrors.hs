@@ -14,6 +14,7 @@
 module Data.Aeson.BetterErrors
   ( -- * The Parser type
     Parse
+  , Parse'
 
   -- * Basic parsers
   , asText
@@ -64,6 +65,7 @@ module Data.Aeson.BetterErrors
 
   -- * Miscellaneous
   , toAesonParser
+  , toAesonParser'
   , JSONType(..)
   , jsonTypeOf
   ) where

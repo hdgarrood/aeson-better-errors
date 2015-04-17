@@ -9,6 +9,7 @@ import Control.Monad.Reader
 import Control.Monad.Trans.Except
 import Control.Monad.Error.Class (MonadError(..))
 
+import Data.Void
 import Data.Foldable (foldMap)
 import Data.Monoid
 import Data.DList (DList)
@@ -38,6 +39,9 @@ newtype Parse err a
   = Parse (ReaderT ParseReader (Except (ParseError err)) a)
   deriving (Functor, Applicative, Monad,
             MonadReader ParseReader, MonadError (ParseError err))
+
+-- | The type of parsers which never produce custom validation errors.
+type Parse' = Parse Void
 
 runParser ::
   (s -> Either String A.Value) ->
@@ -78,6 +82,12 @@ toAesonParser showCustom p val =
   case parseValue p val of
     Right x -> return x
     Left err -> fail (unlines (map T.unpack (displayError showCustom err)))
+
+-- | Take a parser which never produces custom validation errors and turn
+-- it into an Aeson parser. Note that in this case, there is no need to provide
+-- a display function.
+toAesonParser' :: Parse' a -> A.Value -> A.Parser a
+toAesonParser' = toAesonParser absurd
 
 -- | Data used internally by the 'Parse' type.
 data ParseReader = ParseReader

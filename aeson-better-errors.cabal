@@ -35,6 +35,7 @@ library
                    , vector
                    , transformers
                    , mtl
+                   , void
 
   ghc-options:       -Wall
   hs-source-dirs:    src
