@@ -160,7 +160,7 @@ displaySpecifics _ (OutOfBounds i) =
 displaySpecifics _ (WrongType t val) =
   [ "Type mismatch:"
   , "Expected a value of type " <> displayJSONType t
-  , "Got: " <> decodeUtf8 (BL.toStrict (A.encode val))
+  , "Got: " <> decodeUtf8 (B.concat (BL.toChunks (A.encode val)))
   ]
 displaySpecifics _ (ExpectedIntegral x) =
   [ "Expected an integral value, got " <> tshow x ]
