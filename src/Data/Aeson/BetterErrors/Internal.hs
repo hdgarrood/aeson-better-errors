@@ -307,13 +307,21 @@ eachInArray p = do
   forM xs $ \(i, x) ->
     local (appendPath (ArrayIndex i) . setValue x) p
 
--- | Attempt to parse each property value in the array with the given parser,
+-- | Attempt to parse each property value in the object with the given parser,
 -- and collect the results.
 eachInObject :: Parse err a -> Parse err [(Text, a)]
 eachInObject p = do
   xs <- HashMap.toList <$> asObject
   forM xs $ \(k, x) ->
     (k,) <$> local (appendPath (ObjectKey k) . setValue x) p
+
+-- | Attempt to parse each property in the object: parse the key with the
+-- given validation function, parse the value with the given parser, and
+-- collect the results.
+eachInObjectWithKey :: (Text -> Either err k) -> Parse err a -> Parse err [(k, a)]
+eachInObjectWithKey parseKey parseVal =
+  eachInObject parseVal
+      >>= mapM ((\(k,v) -> liftEither ((,) <$> parseKey k <*> pure v)))
 
 -- | Lifts a function attempting to validate an arbitrary JSON value into a
 -- parser. You should only use this if absolutely necessary; the other
