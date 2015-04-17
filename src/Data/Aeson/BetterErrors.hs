@@ -37,6 +37,7 @@ module Data.Aeson.BetterErrors
 
   , eachInArray
   , eachInObject
+  , eachInObjectWithKey
 
   -- * Custom validations
   , withText
