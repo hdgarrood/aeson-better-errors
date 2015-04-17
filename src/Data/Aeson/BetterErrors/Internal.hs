@@ -33,8 +33,14 @@ import Data.Aeson.BetterErrors.Utils
 -- | The type of parsers: things which consume JSON values and produce either
 -- detailed errors or successfully parsed values (of other types).
 --
--- The @err@ type parameter is for your own errors; if you don't need to use
--- any errors of your own, simply set it to @()@.
+-- The @err@ type parameter is for custom validation errors; for parsers that
+-- don't produce any custom validation errors, I recommend you just stick a
+-- type variable in for full generality:
+--
+-- @
+--     asTuple :: Parse e (Int, Int)
+--     asTuple = (,) \<$\> nth 0 asIntegral \<*\> nth 1 asIntegral
+-- @
 newtype Parse err a
   = Parse (ReaderT ParseReader (Except (ParseError err)) a)
   deriving (Functor, Applicative, Monad,
