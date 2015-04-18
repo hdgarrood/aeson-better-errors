@@ -15,6 +15,8 @@ module Data.Aeson.BetterErrors
   ( -- * The Parser type
     Parse
   , Parse'
+  , mapError
+  , (.!)
 
   -- * Basic parsers
   , asText
@@ -28,6 +30,8 @@ module Data.Aeson.BetterErrors
   , asArray
 
   -- * Traversing JSON
+  , perhaps
+
   , key
   , keyOrDefault
   , keyMay

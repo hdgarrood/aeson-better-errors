@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -46,6 +47,21 @@ newtype Parse err a
   deriving (Functor, Applicative, Monad,
             MonadReader ParseReader, MonadError (ParseError err))
 
+runParse :: Parse err a -> A.Value -> Either (ParseError err) a
+runParse (Parse p) v = runExcept (runReaderT p (ParseReader DList.empty v))
+
+-- | Transform the error of a parser according to the given function.
+mapError :: (err -> err') -> Parse err a -> Parse err' a
+mapError f p = do
+  v <- asks rdrValue
+  case runParse p v of
+    Right x -> pure x
+    Left err -> throwError (f <$> err)
+
+-- | An infix version of 'mapError'.
+(.!) :: Parse err a -> (err -> err') -> Parse err' a
+(.!) = flip mapError
+
 -- | The type of parsers which never produce custom validation errors.
 type Parse' = Parse Void
 
@@ -54,12 +70,10 @@ runParser ::
   Parse err a ->
   s ->
   Either (ParseError err) a
-runParser decode (Parse p) src =
+runParser decode p src =
   case decode src of
     Left err -> Left (InvalidJSON err)
-    Right value ->
-      let initialReader = ParseReader DList.empty value
-      in  runExcept (runReaderT p initialReader)
+    Right value -> runParse p value
 
 -- | Run a parser with a lazy 'BL.ByteString' containing JSON data. Note that
 -- the normal caveat applies: the JSON supplied must contain either an object
@@ -119,7 +133,7 @@ data PathPiece
 data ParseError err
   = InvalidJSON String
   | BadSchema [PathPiece] (ErrorSpecifics err)
-  deriving (Show, Eq)
+  deriving (Show, Eq, Functor)
 
 -- | Detailed information in the case where a value could be parsed as JSON,
 -- but a value of the required type could not be constructed from it, for some
@@ -130,7 +144,7 @@ data ErrorSpecifics err
   | WrongType JSONType A.Value -- ^ Expected type, actual value
   | ExpectedIntegral Double
   | CustomError err
-  deriving (Show, Eq)
+  deriving (Show, Eq, Functor)
 
 -- | An enumeration of the different types that JSON values may take.
 data JSONType
@@ -259,6 +273,16 @@ asArray = as patArray TyArray
 -- the case where something is not null.
 asNull :: Parse err ()
 asNull = as patNull TyNull
+
+-- | Given a parser, transform it into a parser which returns @Nothing@ when
+-- supplied with a JSON @null@, and otherwise, attempts to parse with the
+-- original parser; if this succeeds, the result becomes a @Just@ value.
+perhaps :: Parse err a -> Parse err (Maybe a)
+perhaps p = do
+  v <- asks rdrValue
+  case v of
+    A.Null -> return Nothing
+    _      -> Just <$> p
 
 -- | Take the value corresponding to a given key in the current object.
 key :: Text -> Parse err a -> Parse err a
