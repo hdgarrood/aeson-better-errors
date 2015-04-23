@@ -61,8 +61,10 @@ module Data.Aeson.BetterErrors
 
   -- * Errors
   , ParseError(..)
+  , ParseError'
   , PathPiece(..)
   , ErrorSpecifics(..)
+  , ErrorSpecifics'
   , displayError
   , displayError'
   , displayPath

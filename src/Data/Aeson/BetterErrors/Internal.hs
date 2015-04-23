@@ -135,6 +135,10 @@ data ParseError err
   | BadSchema [PathPiece] (ErrorSpecifics err)
   deriving (Show, Eq, Functor)
 
+-- | The type of parse errors which never involve custom validation
+-- errors.
+type ParseError' = ParseError Void
+
 -- | Detailed information in the case where a value could be parsed as JSON,
 -- but a value of the required type could not be constructed from it, for some
 -- reason.
@@ -145,6 +149,10 @@ data ErrorSpecifics err
   | ExpectedIntegral Double
   | CustomError err
   deriving (Show, Eq, Functor)
+
+-- | The type of error specifics which never involve custom validation
+-- errors.
+type ErrorSpecifics' = ErrorSpecifics Void
 
 -- | An enumeration of the different types that JSON values may take.
 data JSONType
@@ -178,7 +186,7 @@ displayError f (BadSchema path specs) =
 
 -- | A version of 'displayError' for parsers which do not produce custom
 -- validation errors.
-displayError' :: ParseError Void -> [Text]
+displayError' :: ParseError' -> [Text]
 displayError' = displayError absurd
 
 displayPath :: [PathPiece] -> Text
@@ -204,7 +212,7 @@ displaySpecifics f (CustomError err) =
 
 -- | A version of `displaySpecifics` for parsers which do not produce
 -- custom validation errors.
-displaySpecifics' :: ErrorSpecifics Void -> [Text]
+displaySpecifics' :: ErrorSpecifics' -> [Text]
 displaySpecifics' = displaySpecifics absurd
 
 -- | Get the type of a JSON value.
