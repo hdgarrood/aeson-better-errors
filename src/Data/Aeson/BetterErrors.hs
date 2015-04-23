@@ -64,8 +64,10 @@ module Data.Aeson.BetterErrors
   , PathPiece(..)
   , ErrorSpecifics(..)
   , displayError
+  , displayError'
   , displayPath
   , displaySpecifics
+  , displaySpecifics'
 
   -- * Miscellaneous
   , toAesonParser

@@ -176,6 +176,11 @@ displayError f (BadSchema [] specs) =
 displayError f (BadSchema path specs) =
   [ "At the path: " <> displayPath path ] <> displaySpecifics f specs
 
+-- | A version of 'displayError' for parsers which do not produce custom
+-- validation errors.
+displayError' :: ParseError Void -> [Text]
+displayError' = displayError absurd
+
 displayPath :: [PathPiece] -> Text
 displayPath = foldMap showPiece
   where
@@ -196,6 +201,11 @@ displaySpecifics _ (ExpectedIntegral x) =
   [ "Expected an integral value, got " <> tshow x ]
 displaySpecifics f (CustomError err) =
   [ f err ]
+
+-- | A version of `displaySpecifics` for parsers which do not produce
+-- custom validation errors.
+displaySpecifics' :: ErrorSpecifics Void -> [Text]
+displaySpecifics' = displaySpecifics absurd
 
 -- | Get the type of a JSON value.
 jsonTypeOf :: A.Value -> JSONType
