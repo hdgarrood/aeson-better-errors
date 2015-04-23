@@ -393,7 +393,7 @@ withRealFloat = with asRealFloat
 withBool :: (Bool -> Either err a) -> Parse err a
 withBool = with asBool
 
--- | Prefer to use functions like 'key or 'eachInObject' to this one where
+-- | Prefer to use functions like 'key' or 'eachInObject' to this one where
 -- possible, as they will generate better error messages.
 withObject :: (A.Object -> Either err a) -> Parse err a
 withObject = with asObject
