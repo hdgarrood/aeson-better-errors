@@ -1,5 +1,5 @@
 name:                aeson-better-errors
-version:             0.6.0.0
+version:             0.7.0.0
 synopsis:            Better error messages when decoding JSON values.
 license:             MIT
 license-file:        LICENSE

@@ -74,6 +74,7 @@ module Data.Aeson.BetterErrors
   -- * Miscellaneous
   , toAesonParser
   , toAesonParser'
+  , fromAesonParser
   , JSONType(..)
   , jsonTypeOf
   ) where

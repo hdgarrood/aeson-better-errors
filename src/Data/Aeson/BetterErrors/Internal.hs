@@ -109,6 +109,16 @@ toAesonParser showCustom p val =
 toAesonParser' :: Parse' a -> A.Value -> A.Parser a
 toAesonParser' = toAesonParser absurd
 
+-- | Create a parser for any type, using its FromJSON instance.  Generally, you
+-- should prefer to write parsers using the other functions in this module;
+-- 'key', 'asString', etc, since they will usually generate better error
+-- messages. However this function is also useful occasionally.
+fromAesonParser :: A.FromJSON a => Parse e a
+fromAesonParser = liftParse $ \v ->
+  case A.fromJSON v of
+    A.Success x -> Right x
+    A.Error err -> Left (FromAeson err)
+
 -- | Data used internally by the 'Parse' type.
 data ParseReader = ParseReader
   { rdrPath  :: DList PathPiece
@@ -152,6 +162,7 @@ data ErrorSpecifics err
   | OutOfBounds Int
   | WrongType JSONType A.Value -- ^ Expected type, actual value
   | ExpectedIntegral Double
+  | FromAeson String -- ^ An error arising inside a 'A.FromJSON' instance.
   | CustomError err
   deriving (Show, Eq, Functor)
 
@@ -212,6 +223,10 @@ displaySpecifics _ (WrongType t val) =
   ]
 displaySpecifics _ (ExpectedIntegral x) =
   [ "Expected an integral value, got " <> tshow x ]
+displaySpecifics _ (FromAeson str) =
+  [ "Arising from an Aeson FromJSON instance:"
+  , T.pack str
+  ]
 displaySpecifics f (CustomError err) =
   [ f err ]
 
