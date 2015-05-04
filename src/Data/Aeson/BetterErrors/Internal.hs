@@ -132,7 +132,12 @@ data PathPiece
 -- | A value indicating that the JSON could not be decoded successfully.
 data ParseError err
   = InvalidJSON String
+    -- ^ Indicates a syntax error in the JSON string. Unfortunately, in this
+    -- case, Aeson's errors are not very helpful.
   | BadSchema [PathPiece] (ErrorSpecifics err)
+    -- ^ Indicates a decoding error; the input was parsed as JSON successfully,
+    -- but a value of the required type could not be constructed, perhaps
+    -- because of a missing key or type mismatch.
   deriving (Show, Eq, Functor)
 
 -- | The type of parse errors which never involve custom validation
