@@ -53,6 +53,7 @@ module Data.Aeson.BetterErrors
   , withBool
   , withObject
   , withArray
+  , throwCustomError
 
   -- * Running parsers
   , parse

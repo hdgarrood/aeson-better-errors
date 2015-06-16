@@ -440,3 +440,7 @@ withObject = with asObject
 -- possible, as they will generate better error messages.
 withArray :: (A.Array -> Either err a) -> Parse err a
 withArray = with asArray
+
+-- | Throw a custom validation error.
+throwCustomError :: err -> Parse err a
+throwCustomError = liftEither . Left
