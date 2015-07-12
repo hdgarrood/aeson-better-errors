@@ -13,7 +13,8 @@
 
 module Data.Aeson.BetterErrors
   ( -- * The Parser type
-    Parse
+    ParseT
+  , Parse
   , Parse'
   , mapError
   , (.!)
@@ -56,8 +57,11 @@ module Data.Aeson.BetterErrors
   , throwCustomError
 
   -- * Running parsers
+  , parseM
   , parse
+  , parseStrictM
   , parseStrict
+  , parseValueM
   , parseValue
 
   -- * Errors
