@@ -27,10 +27,6 @@ catchJust p act handler = catchError act handle
       Nothing -> throwError e
       Just b -> handler b
 
-mapLeft :: (a -> b) -> Either a c -> Either b c
-mapLeft f (Left x) = Left (f x)
-mapLeft _ (Right y) = Right y
-
 -- Value-level patterns for json values
 
 patNull :: A.Value -> Maybe ()

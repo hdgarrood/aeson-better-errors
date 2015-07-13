@@ -6,6 +6,8 @@
 module Data.Aeson.BetterErrors.Internal where
 
 import Control.Applicative
+import Control.Arrow (left)
+import Control.Monad.Identity
 import Control.Monad.Reader
 import Control.Monad.Trans.Except
 import Control.Monad.Error.Class (MonadError(..))
@@ -42,28 +44,48 @@ import Data.Aeson.BetterErrors.Utils
 --     asTuple :: Parse e (Int, Int)
 --     asTuple = (,) \<$\> nth 0 asIntegral \<*\> nth 1 asIntegral
 -- @
-newtype Parse err a
-  = Parse (ReaderT ParseReader (Except (ParseError err)) a)
+--
+-- The @m@ parameter allows you to run the parser within an abitrary underlying Monad.
+-- You may want to use 'Parse' in most cases instead, and all functions in this module work on either.
+newtype ParseT err m a
+  = ParseT (ReaderT ParseReader (ExceptT (ParseError err) m) a)
   deriving (Functor, Applicative, Monad,
             MonadReader ParseReader, MonadError (ParseError err))
+-- | This is the standard version of 'ParseT' over the 'Identity' Monad, for running pure parsers.
+type Parse err a = ParseT err Identity a
+
+instance MonadTrans (ParseT err) where
+  lift f = ParseT (lift (lift f))
+
+runParseT :: ParseT err m a -> A.Value -> m (Either (ParseError err) a)
+runParseT (ParseT p) v = runExceptT (runReaderT p (ParseReader DList.empty v))
 
 runParse :: Parse err a -> A.Value -> Either (ParseError err) a
-runParse (Parse p) v = runExcept (runReaderT p (ParseReader DList.empty v))
+runParse p v = runIdentity (runParseT p v)
+
+mapParseT :: (ReaderT ParseReader (ExceptT (ParseError err) m) a -> ReaderT ParseReader (ExceptT (ParseError err') m') a') -> ParseT err m a -> ParseT err' m' a'
+mapParseT f (ParseT p) = ParseT (f p)
 
 -- | Transform the error of a parser according to the given function.
-mapError :: (err -> err') -> Parse err a -> Parse err' a
-mapError f p = do
-  v <- asks rdrValue
-  case runParse p v of
-    Right x -> pure x
-    Left err -> throwError (f <$> err)
+mapError :: Functor m => (err -> err') -> ParseT err m a -> ParseT err' m a
+mapError f = mapParseT (mapReaderT (withExceptT (fmap f)))
 
 -- | An infix version of 'mapError'.
-(.!) :: Parse err a -> (err -> err') -> Parse err' a
+(.!) :: Functor m => ParseT err m a -> (err -> err') -> ParseT err' m a
 (.!) = flip mapError
 
 -- | The type of parsers which never produce custom validation errors.
-type Parse' = Parse Void
+type Parse' a = Parse Void a
+
+runParserT :: Monad m =>
+  (s -> Either String A.Value) ->
+  ParseT err m a ->
+  s ->
+  m (Either (ParseError err) a)
+runParserT decode p src =
+  case decode src of
+    Left err -> return $ Left (InvalidJSON err)
+    Right value -> runParseT p value
 
 runParser ::
   (s -> Either String A.Value) ->
@@ -71,9 +93,11 @@ runParser ::
   s ->
   Either (ParseError err) a
 runParser decode p src =
-  case decode src of
-    Left err -> Left (InvalidJSON err)
-    Right value -> runParse p value
+  runIdentity (runParserT decode p src)
+
+-- | Like 'parse' but runs the parser on an arbitrary underlying Monad.
+parseM :: Monad m => ParseT err m a -> BL.ByteString -> m (Either (ParseError err) a)
+parseM = runParserT A.eitherDecode
 
 -- | Run a parser with a lazy 'BL.ByteString' containing JSON data. Note that
 -- the normal caveat applies: the JSON supplied must contain either an object
@@ -81,11 +105,19 @@ runParser decode p src =
 parse :: Parse err a -> BL.ByteString -> Either (ParseError err) a
 parse = runParser A.eitherDecode
 
+-- | Like 'parseStrict' but runs the parser on an arbitrary underlying Monad.
+parseStrictM :: Monad m => ParseT err m a -> B.ByteString -> m (Either (ParseError err) a)
+parseStrictM = runParserT A.eitherDecodeStrict
+
 -- | Run a parser with a strict 'B.ByteString' containing JSON data. Note that
 -- the normal caveat applies: the JSON supplied must contain either an object
 -- or an array for this to work.
 parseStrict :: Parse err a -> B.ByteString -> Either (ParseError err) a
 parseStrict = runParser A.eitherDecodeStrict
+
+-- | Like 'parseValue' but runs the parser on an arbitrary underlying Monad.
+parseValueM :: Monad m => ParseT err m a -> A.Value -> m (Either (ParseError err) a)
+parseValueM = runParserT Right
 
 -- | Run a parser with a pre-parsed JSON 'A.Value'.
 parseValue :: Parse err a -> A.Value -> Either (ParseError err) a
@@ -113,7 +145,7 @@ toAesonParser' = toAesonParser absurd
 -- should prefer to write parsers using the other functions in this module;
 -- 'key', 'asString', etc, since they will usually generate better error
 -- messages. However this function is also useful occasionally.
-fromAesonParser :: A.FromJSON a => Parse e a
+fromAesonParser :: (Functor m, Monad m) => A.FromJSON a => ParseT e m a
 fromAesonParser = liftParse $ \v ->
   case A.fromJSON v of
     A.Success x -> Right x
@@ -244,78 +276,74 @@ jsonTypeOf (A.Number _) = TyNumber
 jsonTypeOf (A.Bool _)   = TyBool
 jsonTypeOf A.Null       = TyNull
 
+liftParseT :: (Functor m, Monad m) => (A.Value -> ExceptT (ErrorSpecifics err) m a) -> ParseT err m a
+liftParseT f = ParseT $ ReaderT $ \(ParseReader path value) ->
+  withExceptT (BadSchema (DList.toList path)) (f value)
+
+liftParseM :: (Functor m, Monad m) => (A.Value -> m (Either (ErrorSpecifics err) a)) -> ParseT err m a
+liftParseM f = liftParseT (ExceptT . f)
+
 -- | Lift any parsing function into the 'Parse' type.
-liftParse :: (A.Value -> Either (ErrorSpecifics err) a) -> Parse err a
-liftParse f =
-  asks rdrValue
-    >>= either badSchema return . f
+liftParse :: (Functor m, Monad m) => (A.Value -> Either (ErrorSpecifics err) a) -> ParseT err m a
+liftParse f = liftParseM (return . f)
 
 -- | Aborts parsing, due to an error in the structure of the JSON - that is,
 -- any error other than the JSON not actually being parseable into a 'A.Value'.
-badSchema :: ErrorSpecifics err -> Parse err a
-badSchema specifics = do
-  path <- asks rdrPath
-  throwError (BadSchema (DList.toList path) specifics)
+badSchema :: (Functor m, Monad m) => ErrorSpecifics err -> ParseT err m a
+badSchema = liftParse . const . Left
 
-as :: (A.Value -> Maybe a) -> JSONType -> Parse err a
+as :: (Functor m, Monad m) => (A.Value -> Maybe a) -> JSONType -> ParseT err m a
 as pat ty = liftParse $ \v ->
   maybe (Left (WrongType ty v)) Right (pat v)
 
 -- | Parse a single JSON string as 'Text'.
-asText :: Parse err Text
+asText :: (Functor m, Monad m) => ParseT err m Text
 asText = as patString TyString
 
 -- | Parse a single JSON string as a 'String'.
-asString :: Parse err String
+asString :: (Functor m, Monad m) => ParseT err m String
 asString = T.unpack <$> asText
 
 -- | Parse a single JSON number as a 'Scientific'.
-asScientific :: Parse err Scientific
+asScientific :: (Functor m, Monad m) => ParseT err m Scientific
 asScientific = as patNumber TyNumber
 
 -- | Parse a single JSON number as any 'Integral' type.
-asIntegral :: Integral a => Parse err a
+asIntegral :: (Functor m, Monad m, Integral a) => ParseT err m a
 asIntegral =
-  S.floatingOrInteger <$> asScientific
-    >>= either (badSchema . ExpectedIntegral) return
+  asScientific
+    >>= liftParse . const . left ExpectedIntegral . S.floatingOrInteger
 
 -- | Parse a single JSON number as any 'RealFloat' type.
-asRealFloat :: RealFloat a => Parse err a
+asRealFloat :: (Functor m, Monad m, RealFloat a) => ParseT err m a
 asRealFloat =
-  floatingOrInteger <$> asScientific
-    >>= either return (return . fromIntegral)
-  where
-  -- This local declaration is just here to give GHC a hint as to which type
-  -- should be used in the case of an Integral (here, we choose Integer, for
-  -- safety).
-  floatingOrInteger :: RealFloat b => Scientific -> Either b Integer
-  floatingOrInteger = S.floatingOrInteger
+  either id fromInteger . S.floatingOrInteger <$> asScientific
 
 -- | Parse a single JSON boolean as a 'Bool'.
-asBool :: Parse err Bool
+asBool :: (Functor m, Monad m) => ParseT err m Bool
 asBool = as patBool TyBool
 
 -- | Parse a JSON object, as an 'A.Object'. You should prefer functions like
 -- 'eachInObject' where possible, since they will usually generate better
 -- error messages.
-asObject :: Parse err A.Object
+asObject :: (Functor m, Monad m) => ParseT err m A.Object
 asObject = as patObject TyObject
 
 -- | Parse a JSON array, as an 'A.Array'. You should prefer functions like
 -- 'eachInArray' where possible, since they will usually generate better
 -- error messages.
-asArray :: Parse err A.Array
+asArray :: (Functor m, Monad m) => ParseT err m A.Array
 asArray = as patArray TyArray
 
 -- | Parse a single JSON null value. Useful if you want to throw an error in
 -- the case where something is not null.
-asNull :: Parse err ()
+asNull :: (Functor m, Monad m) => ParseT err m ()
 asNull = as patNull TyNull
 
 -- | Given a parser, transform it into a parser which returns @Nothing@ when
 -- supplied with a JSON @null@, and otherwise, attempts to parse with the
 -- original parser; if this succeeds, the result becomes a @Just@ value.
-perhaps :: Parse err a -> Parse err (Maybe a)
+perhaps :: (Functor m, Monad m) => ParseT err m a -> ParseT err m (Maybe a)
 perhaps p = do
   v <- asks rdrValue
   case v of
@@ -323,20 +351,20 @@ perhaps p = do
     _      -> Just <$> p
 
 -- | Take the value corresponding to a given key in the current object.
-key :: Text -> Parse err a -> Parse err a
+key :: (Functor m, Monad m) => Text -> ParseT err m a -> ParseT err m a
 key k p = key' (badSchema (KeyMissing k)) k p
 
 -- | Take the value corresponding to a given key in the current object, or
 -- if no property exists with that key, use the supplied default.
-keyOrDefault :: Text -> a -> Parse err a -> Parse err a
+keyOrDefault :: (Functor m, Monad m) => Text -> a -> ParseT err m a -> ParseT err m a
 keyOrDefault k def p = key' (pure def) k p
 
 -- | Take the value corresponding to a given key in the current object, or
 -- if no property exists with that key, return Nothing .
-keyMay :: Text -> Parse err a -> Parse err (Maybe a)
+keyMay :: (Functor m, Monad m) => Text -> ParseT err m a -> ParseT err m (Maybe a)
 keyMay k p = keyOrDefault k Nothing (Just <$> p)
 
-key' :: Parse err a -> Text -> Parse err a -> Parse err a
+key' :: (Functor m, Monad m) => ParseT err m a -> Text -> ParseT err m a -> ParseT err m a
 key' onMissing k p = do
   v <- asks rdrValue
   case v of
@@ -350,21 +378,21 @@ key' onMissing k p = do
       badSchema (WrongType TyObject v)
 
 -- | Take the nth value of the current array.
-nth :: Int -> Parse err a -> Parse err a
+nth :: (Functor m, Monad m) => Int -> ParseT err m a -> ParseT err m a
 nth n p = nth' (badSchema (OutOfBounds n)) n p
 
 -- | Take the nth value of the current array, or if no value exists with that
 -- index, use the supplied default.
-nthOrDefault :: Int -> a -> Parse err a -> Parse err a
+nthOrDefault :: (Functor m, Monad m) => Int -> a -> ParseT err m a -> ParseT err m a
 nthOrDefault n def p =
   nth' (pure def) n p
 
 -- | Take the nth value of the current array, or if no value exists with that
 -- index, return Nothing.
-nthMay :: Int -> Parse err a -> Parse err (Maybe a)
+nthMay :: (Functor m, Monad m) => Int -> ParseT err m a -> ParseT err m (Maybe a)
 nthMay n p = nthOrDefault n Nothing (Just <$> p)
 
-nth' :: Parse err a -> Int -> Parse err a -> Parse err a
+nth' :: (Functor m, Monad m) => ParseT err m a -> Int -> ParseT err m a -> ParseT err m a
 nth' onMissing n p = do
   v <- asks rdrValue
   case v of
@@ -379,7 +407,7 @@ nth' onMissing n p = do
 
 -- | Attempt to parse each value in the array with the given parser, and
 -- collect the results.
-eachInArray :: Parse err a -> Parse err [a]
+eachInArray :: (Functor m, Monad m) => ParseT err m a -> ParseT err m [a]
 eachInArray p = do
   xs <- zip [0..] . V.toList <$> asArray
   forM xs $ \(i, x) ->
@@ -387,7 +415,7 @@ eachInArray p = do
 
 -- | Attempt to parse each property value in the object with the given parser,
 -- and collect the results.
-eachInObject :: Parse err a -> Parse err [(Text, a)]
+eachInObject :: (Functor m, Monad m) => ParseT err m a -> ParseT err m [(Text, a)]
 eachInObject p = do
   xs <- HashMap.toList <$> asObject
   forM xs $ \(k, x) ->
@@ -396,7 +424,7 @@ eachInObject p = do
 -- | Attempt to parse each property in the object: parse the key with the
 -- given validation function, parse the value with the given parser, and
 -- collect the results.
-eachInObjectWithKey :: (Text -> Either err k) -> Parse err a -> Parse err [(k, a)]
+eachInObjectWithKey :: (Functor m, Monad m) => (Text -> Either err k) -> ParseT err m a -> ParseT err m [(k, a)]
 eachInObjectWithKey parseKey parseVal =
   eachInObject parseVal
       >>= mapM ((\(k,v) -> liftEither ((,) <$> parseKey k <*> pure v)))
@@ -404,43 +432,77 @@ eachInObjectWithKey parseKey parseVal =
 -- | Lifts a function attempting to validate an arbitrary JSON value into a
 -- parser. You should only use this if absolutely necessary; the other
 -- functions in this module will generally give better error reporting.
-withValue :: (A.Value -> Either err a) -> Parse err a
-withValue f = liftParse (mapLeft CustomError . f)
+withValue :: (Functor m, Monad m) => (A.Value -> Either err a) -> ParseT err m a
+withValue f = liftParse (left CustomError . f)
 
-liftEither :: Either err a -> Parse err a
-liftEither = either (badSchema . CustomError) return
+liftEither :: (Functor m, Monad m) => Either err a -> ParseT err m a
+liftEither = withValue . const
 
-with :: Parse err a -> (a -> Either err b) -> Parse err b
-with g f = g >>= liftEither . f
+withM :: (Functor m, Monad m) => ParseT err m a -> (a -> m (Either err b)) -> ParseT err m b
+withM g f = g >>= lift . f >>= liftEither
 
-withText :: (Text -> Either err a) -> Parse err a
+with :: (Functor m, Monad m) => ParseT err m a -> (a -> Either err b) -> ParseT err m b
+with g f = withM g (return . f)
+
+withTextM :: (Functor m, Monad m) => (Text -> m (Either err a)) -> ParseT err m a
+withTextM = withM asText
+
+withText :: (Functor m, Monad m) => (Text -> Either err a) -> ParseT err m a
 withText = with asText
 
-withString :: (String -> Either err a) -> Parse err a
+withStringM :: (Functor m, Monad m) => (String -> m (Either err a)) -> ParseT err m a
+withStringM = withM asString
+
+withString :: (Functor m, Monad m) => (String -> Either err a) -> ParseT err m a
 withString = with asString
 
-withScientific :: (Scientific -> Either err a) -> Parse err a
+withScientificM :: (Functor m, Monad m) => (Scientific -> m (Either err a)) -> ParseT err m a
+withScientificM = withM asScientific
+
+withScientific :: (Functor m, Monad m) => (Scientific -> Either err a) -> ParseT err m a
 withScientific = with asScientific
 
-withIntegral :: Integral a => (a -> Either err b) -> Parse err b
+withIntegralM :: (Functor m, Monad m, Integral a) => (a -> m (Either err b)) -> ParseT err m b
+withIntegralM = withM asIntegral
+
+withIntegral :: (Functor m, Monad m, Integral a) => (a -> Either err b) -> ParseT err m b
 withIntegral = with asIntegral
 
-withRealFloat :: RealFloat a => (a -> Either err b) -> Parse err b
+withRealFloatM :: (Functor m, Monad m, RealFloat a) => (a -> m (Either err b)) -> ParseT err m b
+withRealFloatM = withM asRealFloat
+
+withRealFloat :: (Functor m, Monad m, RealFloat a) => (a -> Either err b) -> ParseT err m b
 withRealFloat = with asRealFloat
 
-withBool :: (Bool -> Either err a) -> Parse err a
+withBoolM :: (Functor m, Monad m) => (Bool -> m (Either err a)) -> ParseT err m a
+withBoolM = withM asBool
+
+withBool :: (Functor m, Monad m) => (Bool -> Either err a) -> ParseT err m a
 withBool = with asBool
 
 -- | Prefer to use functions like 'key' or 'eachInObject' to this one where
 -- possible, as they will generate better error messages.
-withObject :: (A.Object -> Either err a) -> Parse err a
+withObjectM :: (Functor m, Monad m) => (A.Object -> m (Either err a)) -> ParseT err m a
+withObjectM = withM asObject
+
+-- | Prefer to use functions like 'key' or 'eachInObject' to this one where
+-- possible, as they will generate better error messages.
+withObject :: (Functor m, Monad m) => (A.Object -> Either err a) -> ParseT err m a
 withObject = with asObject
 
 -- | Prefer to use functions like 'nth' or 'eachInArray' to this one where
 -- possible, as they will generate better error messages.
-withArray :: (A.Array -> Either err a) -> Parse err a
+withArrayM :: (Functor m, Monad m) => (A.Array -> m (Either err a)) -> ParseT err m a
+withArrayM = withM asArray
+
+-- | Prefer to use functions like 'nth' or 'eachInArray' to this one where
+-- possible, as they will generate better error messages.
+withArray :: (Functor m, Monad m) => (A.Array -> Either err a) -> ParseT err m a
 withArray = with asArray
 
 -- | Throw a custom validation error.
-throwCustomError :: err -> Parse err a
+throwCustomError :: (Functor m, Monad m) => err -> ParseT err m a
 throwCustomError = liftEither . Left
+
+liftCustomT :: (Functor m, Monad m) => ExceptT err m a -> ParseT err m a
+liftCustomT f = lift (runExceptT f) >>= liftEither
