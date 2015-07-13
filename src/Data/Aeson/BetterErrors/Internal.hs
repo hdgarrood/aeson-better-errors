@@ -44,10 +44,14 @@ import Data.Aeson.BetterErrors.Utils
 --     asTuple :: Parse e (Int, Int)
 --     asTuple = (,) \<$\> nth 0 asIntegral \<*\> nth 1 asIntegral
 -- @
+--
+-- The @m@ parameter allows you to run the parser within an abitrary underlying Monad.
+-- You may want to use 'Parse' in most cases instead, and all functions in this module work on either.
 newtype ParseT err m a
   = ParseT (ReaderT ParseReader (ExceptT (ParseError err) m) a)
   deriving (Functor, Applicative, Monad,
             MonadReader ParseReader, MonadError (ParseError err))
+-- | This is the standard version of 'ParseT' over the 'Identity' Monad, for running pure parsers.
 type Parse err a = ParseT err Identity a
 
 instance MonadTrans (ParseT err) where
@@ -91,6 +95,7 @@ runParser ::
 runParser decode p src =
   runIdentity (runParserT decode p src)
 
+-- | Like 'parse' but runs the parser on an arbitrary underlying Monad.
 parseM :: Monad m => ParseT err m a -> BL.ByteString -> m (Either (ParseError err) a)
 parseM = runParserT A.eitherDecode
 
@@ -100,6 +105,7 @@ parseM = runParserT A.eitherDecode
 parse :: Parse err a -> BL.ByteString -> Either (ParseError err) a
 parse = runParser A.eitherDecode
 
+-- | Like 'parseStrict' but runs the parser on an arbitrary underlying Monad.
 parseStrictM :: Monad m => ParseT err m a -> B.ByteString -> m (Either (ParseError err) a)
 parseStrictM = runParserT A.eitherDecodeStrict
 
@@ -109,6 +115,7 @@ parseStrictM = runParserT A.eitherDecodeStrict
 parseStrict :: Parse err a -> B.ByteString -> Either (ParseError err) a
 parseStrict = runParser A.eitherDecodeStrict
 
+-- | Like 'parseValue' but runs the parser on an arbitrary underlying Monad.
 parseValueM :: Monad m => ParseT err m a -> A.Value -> m (Either (ParseError err) a)
 parseValueM = runParserT Right
 
@@ -437,28 +444,56 @@ withM g f = g >>= lift . f >>= liftEither
 with :: (Functor m, Monad m) => ParseT err m a -> (a -> Either err b) -> ParseT err m b
 with g f = withM g (return . f)
 
+withTextM :: (Functor m, Monad m) => (Text -> m (Either err a)) -> ParseT err m a
+withTextM = withM asText
+
 withText :: (Functor m, Monad m) => (Text -> Either err a) -> ParseT err m a
 withText = with asText
+
+withStringM :: (Functor m, Monad m) => (String -> m (Either err a)) -> ParseT err m a
+withStringM = withM asString
 
 withString :: (Functor m, Monad m) => (String -> Either err a) -> ParseT err m a
 withString = with asString
 
+withScientificM :: (Functor m, Monad m) => (Scientific -> m (Either err a)) -> ParseT err m a
+withScientificM = withM asScientific
+
 withScientific :: (Functor m, Monad m) => (Scientific -> Either err a) -> ParseT err m a
 withScientific = with asScientific
+
+withIntegralM :: (Functor m, Monad m, Integral a) => (a -> m (Either err b)) -> ParseT err m b
+withIntegralM = withM asIntegral
 
 withIntegral :: (Functor m, Monad m, Integral a) => (a -> Either err b) -> ParseT err m b
 withIntegral = with asIntegral
 
+withRealFloatM :: (Functor m, Monad m, RealFloat a) => (a -> m (Either err b)) -> ParseT err m b
+withRealFloatM = withM asRealFloat
+
 withRealFloat :: (Functor m, Monad m, RealFloat a) => (a -> Either err b) -> ParseT err m b
 withRealFloat = with asRealFloat
+
+withBoolM :: (Functor m, Monad m) => (Bool -> m (Either err a)) -> ParseT err m a
+withBoolM = withM asBool
 
 withBool :: (Functor m, Monad m) => (Bool -> Either err a) -> ParseT err m a
 withBool = with asBool
 
 -- | Prefer to use functions like 'key' or 'eachInObject' to this one where
 -- possible, as they will generate better error messages.
+withObjectM :: (Functor m, Monad m) => (A.Object -> m (Either err a)) -> ParseT err m a
+withObjectM = withM asObject
+
+-- | Prefer to use functions like 'key' or 'eachInObject' to this one where
+-- possible, as they will generate better error messages.
 withObject :: (Functor m, Monad m) => (A.Object -> Either err a) -> ParseT err m a
 withObject = with asObject
+
+-- | Prefer to use functions like 'nth' or 'eachInArray' to this one where
+-- possible, as they will generate better error messages.
+withArrayM :: (Functor m, Monad m) => (A.Array -> m (Either err a)) -> ParseT err m a
+withArrayM = withM asArray
 
 -- | Prefer to use functions like 'nth' or 'eachInArray' to this one where
 -- possible, as they will generate better error messages.

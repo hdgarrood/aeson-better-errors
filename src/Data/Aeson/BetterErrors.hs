@@ -56,13 +56,25 @@ module Data.Aeson.BetterErrors
   , withArray
   , throwCustomError
 
+  -- ** Monadic validators
+  , withTextM
+  , withStringM
+  , withScientificM
+  , withIntegralM
+  , withRealFloatM
+  , withBoolM
+  , withObjectM
+  , withArrayM
+
   -- * Running parsers
-  , parseM
   , parse
-  , parseStrictM
   , parseStrict
-  , parseValueM
   , parseValue
+
+  -- ** Monadic parsers
+  , parseM
+  , parseStrictM
+  , parseValueM
 
   -- * Errors
   , ParseError(..)
