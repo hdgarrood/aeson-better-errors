@@ -42,6 +42,7 @@ module Data.Aeson.BetterErrors
   , nthMay
 
   , eachInArray
+  , forEachInObject
   , eachInObject
   , eachInObjectWithKey
 

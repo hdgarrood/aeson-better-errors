@@ -413,6 +413,8 @@ eachInArray p = do
   forM xs $ \(i, x) ->
     local (appendPath (ArrayIndex i) . setValue x) p
 
+-- | Parse each property in an object with the given parser, given the key as
+-- an argument, and collect the results.
 forEachInObject :: (Functor m, Monad m) => (Text -> ParseT err m a) -> ParseT err m [a]
 forEachInObject p = do
   xs <- HashMap.toList <$> asObject
