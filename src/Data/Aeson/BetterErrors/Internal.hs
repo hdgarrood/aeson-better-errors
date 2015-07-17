@@ -413,21 +413,25 @@ eachInArray p = do
   forM xs $ \(i, x) ->
     local (appendPath (ArrayIndex i) . setValue x) p
 
+-- | Parse each property in an object with the given parser, given the key as
+-- an argument, and collect the results.
+forEachInObject :: (Functor m, Monad m) => (Text -> ParseT err m a) -> ParseT err m [a]
+forEachInObject p = do
+  xs <- HashMap.toList <$> asObject
+  forM xs $ \(k, x) ->
+    local (appendPath (ObjectKey k) . setValue x) (p k)
+
 -- | Attempt to parse each property value in the object with the given parser,
 -- and collect the results.
 eachInObject :: (Functor m, Monad m) => ParseT err m a -> ParseT err m [(Text, a)]
-eachInObject p = do
-  xs <- HashMap.toList <$> asObject
-  forM xs $ \(k, x) ->
-    (k,) <$> local (appendPath (ObjectKey k) . setValue x) p
+eachInObject = eachInObjectWithKey Right
 
 -- | Attempt to parse each property in the object: parse the key with the
 -- given validation function, parse the value with the given parser, and
 -- collect the results.
 eachInObjectWithKey :: (Functor m, Monad m) => (Text -> Either err k) -> ParseT err m a -> ParseT err m [(k, a)]
-eachInObjectWithKey parseKey parseVal =
-  eachInObject parseVal
-      >>= mapM ((\(k,v) -> liftEither ((,) <$> parseKey k <*> pure v)))
+eachInObjectWithKey parseKey parseVal = forEachInObject $ \k ->
+  (,) <$> liftEither (parseKey k) <*> parseVal
 
 -- | Lifts a function attempting to validate an arbitrary JSON value into a
 -- parser. You should only use this if absolutely necessary; the other
