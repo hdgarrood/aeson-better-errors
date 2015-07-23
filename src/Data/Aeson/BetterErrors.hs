@@ -20,15 +20,9 @@ module Data.Aeson.BetterErrors
   , (.!)
 
   -- * Basic parsers
-  , asText
-  , asString
-  , asScientific
+  , FromJSONBetterErrors(..)
   , asIntegral
   , asRealFloat
-  , asBool
-  , asNull
-  , asObject
-  , asArray
 
   -- * Traversing JSON
   , perhaps
@@ -47,25 +41,15 @@ module Data.Aeson.BetterErrors
   , eachInObjectWithKey
 
   -- * Custom validations
-  , withText
-  , withString
-  , withScientific
+  , with
   , withIntegral
   , withRealFloat
-  , withBool
-  , withObject
-  , withArray
   , throwCustomError
 
   -- ** Monadic validators
-  , withTextM
-  , withStringM
-  , withScientificM
+  , withM
   , withIntegralM
   , withRealFloatM
-  , withBoolM
-  , withObjectM
-  , withArrayM
 
   -- * Running parsers
   , parse
