@@ -20,6 +20,7 @@ module Data.Aeson.BetterErrors
   , (.!)
 
   -- * Basic parsers
+  , asValue
   , asText
   , asString
   , asScientific
@@ -47,6 +48,7 @@ module Data.Aeson.BetterErrors
   , eachInObjectWithKey
 
   -- * Custom validations
+  , withValue
   , withText
   , withString
   , withScientific
@@ -58,6 +60,7 @@ module Data.Aeson.BetterErrors
   , throwCustomError
 
   -- ** Monadic validators
+  , withValueM
   , withTextM
   , withStringM
   , withScientificM

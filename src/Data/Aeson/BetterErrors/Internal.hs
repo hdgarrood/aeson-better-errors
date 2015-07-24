@@ -296,6 +296,13 @@ as :: (Functor m, Monad m) => (A.Value -> Maybe a) -> JSONType -> ParseT err m a
 as pat ty = liftParse $ \v ->
   maybe (Left (WrongType ty v)) Right (pat v)
 
+-- | Return the current JSON 'A.Value' as is.  This does no error checking and
+-- thus always succeeds.  It would be better to use more specific functions
+-- like 'asText' or 'withValue' where possible, since they can generate better
+-- error messages.
+asValue :: (Functor m, Monad m) => ParseT err m A.Value
+asValue = asks rdrValue
+
 -- | Parse a single JSON string as 'Text'.
 asText :: (Functor m, Monad m) => ParseT err m Text
 asText = as patString TyString
@@ -438,6 +445,9 @@ eachInObjectWithKey parseKey parseVal = forEachInObject $ \k ->
 -- functions in this module will generally give better error reporting.
 withValue :: (Functor m, Monad m) => (A.Value -> Either err a) -> ParseT err m a
 withValue f = liftParse (left CustomError . f)
+
+withValueM :: (Functor m, Monad m) => (A.Value -> m (Either err a)) -> ParseT err m a
+withValueM f = liftParseM (fmap (left CustomError) . f)
 
 liftEither :: (Functor m, Monad m) => Either err a -> ParseT err m a
 liftEither = withValue . const
