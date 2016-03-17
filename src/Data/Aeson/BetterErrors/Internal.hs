@@ -2,10 +2,15 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP #-}
 
 module Data.Aeson.BetterErrors.Internal where
 
-import Control.Applicative
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative (Applicative, pure, (<$>), (<*>))
+import Data.Foldable (foldMap)
+#endif
+
 import Control.Arrow (left)
 import Control.Monad.Identity
 import Control.Monad.Reader
@@ -13,7 +18,6 @@ import Control.Monad.Trans.Except
 import Control.Monad.Error.Class (MonadError(..))
 
 import Data.Void
-import Data.Foldable (foldMap)
 import Data.Monoid
 import Data.DList (DList)
 import qualified Data.DList as DList
