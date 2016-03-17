@@ -34,7 +34,7 @@ library
                    , scientific
                    , vector
                    , transformers
-                   , transformers-compat >= 0.3
+                   , transformers-compat >= 0.4
                    , mtl
                    , void
 
