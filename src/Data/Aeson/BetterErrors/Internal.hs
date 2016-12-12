@@ -78,6 +78,13 @@ mapError f = mapParseT (mapReaderT (withExceptT (fmap f)))
 (.!) :: Functor m => ParseT err m a -> (err -> err') -> ParseT err' m a
 (.!) = flip mapError
 
+-- | First try the left parser, if that fails try the right.
+-- | If both fail, the error will come from the right one.
+(<|>) :: Monad m => ParseT err m a -> ParseT err m a -> ParseT err m a
+l <|> r = catchError l (const r)
+
+infixl 3 <|>
+
 -- | The type of parsers which never produce custom validation errors.
 type Parse' a = Parse Void a
 

@@ -18,6 +18,7 @@ module Data.Aeson.BetterErrors
   , Parse'
   , mapError
   , (.!)
+  , (<|>)
 
   -- * Basic parsers
   , asValue
@@ -102,11 +103,3 @@ module Data.Aeson.BetterErrors
 
 import Data.Aeson (Value) -- for haddock
 import Data.Aeson.BetterErrors.Internal
-
--- TODO Alternative?
--- use monoid, combine errors?
--- Simply take rightmost?
--- Or maybe take the one with the deepest path?
---
--- Or, export our own (<|>) that uses a semigroup (since errors are
--- 'nonempty') - that is, we don't want to allow failing with no error.
