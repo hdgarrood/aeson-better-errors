@@ -221,7 +221,7 @@ data JSONType
   | TyNumber
   | TyBool
   | TyNull
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Enum, Bounded)
 
 displayJSONType :: JSONType -> Text
 displayJSONType t = case t of
