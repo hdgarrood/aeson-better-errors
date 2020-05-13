@@ -12,6 +12,7 @@ import Data.Foldable (foldMap)
 #endif
 
 import Control.Arrow (left)
+import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Reader
 import Control.Monad.Trans.Except
