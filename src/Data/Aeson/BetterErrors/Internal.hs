@@ -60,6 +60,11 @@ type Parse err a = ParseT err Identity a
 
 instance MonadTrans (ParseT err) where
   lift f = ParseT (lift (lift f))
+  
+#if __GLASGOW_HASKELL__ >= 880
+instance Monad m => MonadFail (ParseT err m) where
+  fail = throwError . InvalidJSON
+#endif
 
 runParseT :: ParseT err m a -> A.Value -> m (Either (ParseError err) a)
 runParseT (ParseT p) v = runExceptT (runReaderT p (ParseReader DList.empty v))
