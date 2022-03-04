@@ -1,5 +1,5 @@
 name:                aeson-better-errors
-version:             0.9.1.0
+version:             0.9.1.1
 synopsis:            Better error messages when decoding JSON values.
 license:             MIT
 license-file:        LICENSE
@@ -10,6 +10,7 @@ category:            Text, Web, JSON
 build-type:          Simple
 cabal-version:       >=1.10
 extra-source-files:  README.md
+                   , CHANGELOG.md
 
 description:
   A small package which gives you the tools to build parsers to decode JSON
