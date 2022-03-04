@@ -33,7 +33,13 @@ import Data.Vector ((!?))
 import qualified Data.Vector as V
 import Data.Scientific (Scientific)
 import qualified Data.Scientific as S
+
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.Aeson.Key as Key
+#else
 import qualified Data.HashMap.Strict as HashMap
+#endif
 
 import Data.Aeson.BetterErrors.Utils
 
@@ -387,7 +393,11 @@ key' onMissing k p = do
   v <- asks rdrValue
   case v of
     A.Object obj ->
+#if MIN_VERSION_aeson(2,0,0)
+      case KeyMap.lookup (Key.fromText k) obj of
+#else
       case HashMap.lookup k obj of
+#endif
         Just v' ->
           local (appendPath (ObjectKey k) . setValue v') p
         Nothing ->
@@ -435,9 +445,15 @@ eachInArray p = do
 -- an argument, and collect the results.
 forEachInObject :: (Functor m, Monad m) => (Text -> ParseT err m a) -> ParseT err m [a]
 forEachInObject p = do
+#if MIN_VERSION_aeson(2,0,0)
+  xs <- KeyMap.toList <$> asObject
+  forM xs $ \(k, x) ->
+    local (appendPath (ObjectKey (Key.toText k)) . setValue x) (p (Key.toText k))
+#else
   xs <- HashMap.toList <$> asObject
   forM xs $ \(k, x) ->
     local (appendPath (ObjectKey k) . setValue x) (p k)
+#endif
 
 -- | Attempt to parse each property value in the object with the given parser,
 -- and collect the results.
