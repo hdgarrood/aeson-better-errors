@@ -10,6 +10,10 @@ module Data.Aeson.BetterErrors.Internal where
 import Control.Applicative (Applicative, pure, (<$>), (<*>))
 import Data.Foldable (foldMap)
 #endif
+#if MIN_VERSION_mtl(2, 3, 0)
+import Control.Monad (forM)
+#else
+#endif
 
 import Control.Arrow (left)
 import Control.Monad.Identity
