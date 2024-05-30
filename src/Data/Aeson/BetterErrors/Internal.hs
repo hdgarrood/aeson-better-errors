@@ -6,17 +6,13 @@
 
 module Data.Aeson.BetterErrors.Internal where
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative (Applicative, pure, (<$>), (<*>))
-import Data.Foldable (foldMap)
-#endif
-
 import Control.Arrow (left)
 import Control.Monad.Identity
 import Control.Monad.Reader
 import Control.Monad.Trans.Except
 import Control.Monad.Error.Class (MonadError(..))
 
+import Data.Traversable
 import Data.Void
 import Data.Monoid
 import Data.DList (DList)
@@ -26,6 +22,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as B
+import Data.List.NonEmpty (NonEmpty(..))
 
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
@@ -79,6 +76,27 @@ mapParseT f (ParseT p) = ParseT (f p)
 -- | Transform the error of a parser according to the given function.
 mapError :: Functor m => (err -> err') -> ParseT err m a -> ParseT err' m a
 mapError f = mapParseT (mapReaderT (withExceptT (fmap f)))
+
+newtype ParseAccumT err m a = ParseAccumT { unParseAccumT :: ParseT err m a }
+  deriving (Functor)
+
+instance Applicative m => Applicative (ParseAccumT err m) where
+    pure x = ParseAccumT $ ParseT $ ReaderT $ \_ -> ExceptT $ pure (Right x)
+    ParseAccumT (ParseT (ReaderT ff)) <*> ParseAccumT (ParseT (ReaderT fx)) =
+      ParseAccumT $ ParseT $ ReaderT $ \r -> ExceptT $
+        mergeEithers <$> runExceptT (ff r) <*>  runExceptT (fx r)
+      where
+        mergeEithers (Left e) (Left e') = Left $ mergeErrors e e'
+        mergeEithers (Left e) (Right _) = Left e
+        mergeEithers (Right _) (Left e') = Left e'
+        mergeEithers (Right f) (Right x) = Right (f x)
+        -- we shouldn't really ever see InvalidJSON since we only leave JSON at
+        -- the very start, before any Applicative actions
+        mergeErrors (InvalidJSON x) (InvalidJSON y) = InvalidJSON $ x <> "\n" <> y
+        mergeErrors (InvalidJSON _) (BadSchema ys) = BadSchema ys
+        mergeErrors (BadSchema xs) (InvalidJSON _) = BadSchema xs
+        -- pretty inefficient if there are many keys or items in the array
+        mergeErrors (BadSchema xs) (BadSchema ys) = BadSchema (xs <> ys)
 
 -- | An infix version of 'mapError'.
 (.!) :: Functor m => ParseT err m a -> (err -> err') -> ParseT err' m a
@@ -166,7 +184,7 @@ fromAesonParser :: (Functor m, Monad m) => A.FromJSON a => ParseT e m a
 fromAesonParser = liftParse $ \v ->
   case A.fromJSON v of
     A.Success x -> Right x
-    A.Error err -> Left (FromAeson err)
+    A.Error err -> Left (FromAeson err :| [])
 
 -- | Data used internally by the 'Parse' type.
 data ParseReader = ParseReader
@@ -193,7 +211,7 @@ data ParseError err
   = InvalidJSON String
     -- ^ Indicates a syntax error in the JSON string. Unfortunately, in this
     -- case, Aeson's errors are not very helpful.
-  | BadSchema [PathPiece] (ErrorSpecifics err)
+  | BadSchema (NonEmpty ([PathPiece], ErrorSpecifics err))
     -- ^ Indicates a decoding error; the input was parsed as JSON successfully,
     -- but a value of the required type could not be constructed, perhaps
     -- because of a missing key or type mismatch.
@@ -244,10 +262,11 @@ displayJSONType t = case t of
 displayError :: (err -> Text) -> ParseError err -> [Text]
 displayError _ (InvalidJSON str) =
   [ "The input could not be parsed as JSON", "aeson said: " <> T.pack str ]
-displayError f (BadSchema [] specs) =
-  displaySpecifics f specs
-displayError f (BadSchema path specs) =
-  [ "At the path: " <> displayPath path ] <> displaySpecifics f specs
+displayError _ (BadSchema _) = undefined
+-- displayError f (BadSchema [] specs) =
+--   displaySpecifics f specs
+-- displayError f (BadSchema path specs) =
+--   [ "At the path: " <> displayPath path ] <> displaySpecifics f specs
 
 -- | A version of 'displayError' for parsers which do not produce custom
 -- validation errors.
@@ -293,25 +312,25 @@ jsonTypeOf (A.Number _) = TyNumber
 jsonTypeOf (A.Bool _)   = TyBool
 jsonTypeOf A.Null       = TyNull
 
-liftParseT :: (Functor m, Monad m) => (A.Value -> ExceptT (ErrorSpecifics err) m a) -> ParseT err m a
+liftParseT :: (Functor m, Monad m) => (A.Value -> ExceptT (NonEmpty (ErrorSpecifics err)) m a) -> ParseT err m a
 liftParseT f = ParseT $ ReaderT $ \(ParseReader path value) ->
-  withExceptT (BadSchema (DList.toList path)) (f value)
+  withExceptT (BadSchema . (fmap (DList.toList path,))) (f value)
 
-liftParseM :: (Functor m, Monad m) => (A.Value -> m (Either (ErrorSpecifics err) a)) -> ParseT err m a
+liftParseM :: (Functor m, Monad m) => (A.Value -> m (Either (NonEmpty (ErrorSpecifics err)) a)) -> ParseT err m a
 liftParseM f = liftParseT (ExceptT . f)
 
 -- | Lift any parsing function into the 'Parse' type.
-liftParse :: (Functor m, Monad m) => (A.Value -> Either (ErrorSpecifics err) a) -> ParseT err m a
+liftParse :: (Functor m, Monad m) => (A.Value -> Either (NonEmpty (ErrorSpecifics err)) a) -> ParseT err m a
 liftParse f = liftParseM (return . f)
 
 -- | Aborts parsing, due to an error in the structure of the JSON - that is,
 -- any error other than the JSON not actually being parseable into a 'A.Value'.
 badSchema :: (Functor m, Monad m) => ErrorSpecifics err -> ParseT err m a
-badSchema = liftParse . const . Left
+badSchema = liftParse . const . Left . pure
 
 as :: (Functor m, Monad m) => (A.Value -> Maybe a) -> JSONType -> ParseT err m a
 as pat ty = liftParse $ \v ->
-  maybe (Left (WrongType ty v)) Right (pat v)
+  maybe (Left (WrongType ty v :| [])) Right (pat v)
 
 -- | Return the current JSON 'A.Value' as is.  This does no error checking and
 -- thus always succeeds. You probably don't want this parser unless the JSON
@@ -336,7 +355,7 @@ asScientific = as patNumber TyNumber
 asIntegral :: (Functor m, Monad m, Integral a) => ParseT err m a
 asIntegral =
   asScientific
-    >>= liftParse . const . left ExpectedIntegral . S.floatingOrInteger
+    >>= liftParse . const . left (pure . ExpectedIntegral) . S.floatingOrInteger
 
 -- | Parse a single JSON number as any 'RealFloat' type.
 asRealFloat :: (Functor m, Monad m, RealFloat a) => ParseT err m a
@@ -438,7 +457,7 @@ nth' onMissing n p = do
 eachInArray :: (Functor m, Monad m) => ParseT err m a -> ParseT err m [a]
 eachInArray p = do
   xs <- zip [0..] . V.toList <$> asArray
-  forM xs $ \(i, x) ->
+  unParseAccumT $ for xs $ \(i, x) -> ParseAccumT $
     local (appendPath (ArrayIndex i) . setValue x) p
 
 -- | Parse each property in an object with the given parser, given the key as
@@ -447,11 +466,11 @@ forEachInObject :: (Functor m, Monad m) => (Text -> ParseT err m a) -> ParseT er
 forEachInObject p = do
 #if MIN_VERSION_aeson(2,0,0)
   xs <- KeyMap.toList <$> asObject
-  forM xs $ \(k, x) ->
+  unParseAccumT $ for xs $ \(k, x) -> ParseAccumT $
     local (appendPath (ObjectKey (Key.toText k)) . setValue x) (p (Key.toText k))
 #else
   xs <- HashMap.toList <$> asObject
-  forM xs $ \(k, x) ->
+  unParseAccumT $ for xs $ \(k, x) -> ParseAccumT $
     local (appendPath (ObjectKey k) . setValue x) (p k)
 #endif
 
@@ -471,10 +490,10 @@ eachInObjectWithKey parseKey parseVal = forEachInObject $ \k ->
 -- parser. You should only use this if absolutely necessary; the other
 -- functions in this module will generally give better error reporting.
 withValue :: (Functor m, Monad m) => (A.Value -> Either err a) -> ParseT err m a
-withValue f = liftParse (left CustomError . f)
+withValue f = liftParse (left (pure . CustomError) . f)
 
 withValueM :: (Functor m, Monad m) => (A.Value -> m (Either err a)) -> ParseT err m a
-withValueM f = liftParseM (fmap (left CustomError) . f)
+withValueM f = liftParseM (fmap (left (pure . CustomError)) . f)
 
 liftEither :: (Functor m, Monad m) => Either err a -> ParseT err m a
 liftEither = withValue . const
