@@ -1,5 +1,9 @@
 # Revision history for aeson-better-errors
 
+## 0.9.1.3
+
+* Make compabible with aeson <2.3
+
 ## 0.9.1.2
 
 * Make compatible with mtl-2.3
